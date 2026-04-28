@@ -23,6 +23,11 @@ jobs:
       with:
         python-version: '3.x'
 
+    - name: Installa dipendenze Python
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install requests beautifulsoup4
+
     - name: Recupera e parse Santo del Giorno con Python (debug)
       env:
         URL: "https://it.cathopedia.org/wiki/Santo_del_giorno"
@@ -42,7 +47,8 @@ jobs:
           r.raise_for_status()
         except Exception as e:
           print("ERRORE FETCH:", e)
-          print(json.dumps({"santo":"ERRORE_FETCH"}))
+          with open("santo-oggi.json", "w", encoding="utf-8") as f:
+            json.dump({"santo":"ERRORE_FETCH"}, f, ensure_ascii=False)
           sys.exit(0)
 
         html = r.text
