@@ -1,0 +1,27 @@
+name: Aggiorna Santo del Giorno
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # ogni giorno alle 03:00
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Recupera Santo del Giorno da Cathopedia
+      run: |
+        santo=$(curl -s https://it.cathopedia.org/wiki/Santo_del_giorno | grep -oP '(?<=<title>).*?(?=</title>)' | sed 's/ - Cathopedia.*//')
+        echo "{ \"santo\": \"$santo\" }" > santo-oggi.json
+
+    - name: Commit e push
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git add santo-oggi.json
+        git commit -m "Aggiornamento automatico Santo del Giorno" || echo "Nessuna modifica"
+        git push
