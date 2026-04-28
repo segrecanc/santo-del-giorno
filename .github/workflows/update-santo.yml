@@ -2,8 +2,11 @@ name: Aggiorna Santo del Giorno
 
 on:
   schedule:
-    - cron: "0 3 * * *"   # ogni giorno alle 03:00
+    - cron: "0 3 * * *"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   update:
@@ -12,18 +15,47 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
+      with:
+        persist-credentials: true
 
-    - name: Recupera Santo del Giorno da Cathopedia
+    - name: Mostra ambiente (debug)
       run: |
-        santo=$(curl -s https://it.cathopedia.org/wiki/Santo_del_giorno | grep -oP '(?<=<title>).*?(?=</title>)' | sed 's/ - Cathopedia.*//')
-        echo "{ \"santo\": \"$santo\" }" > santo-oggi.json
+        echo "USER: $GITHUB_ACTOR"
+        echo "REPO: $GITHUB_REPOSITORY"
+        echo "BRANCH: $GITHUB_REF"
+
+    - name: Recupera pagina Santo del Giorno (debug)
+      run: |
+        # Scarica la pagina e salva per ispezione
+        curl -s -L "https://it.cathopedia.org/wiki/Santo_del_giorno" -o pagina.html
+        echo "=== prime 200 caratteri della pagina ==="
+        head -c 200 pagina.html | sed -n '1,200p'
+        echo "=== fine anteprima ==="
+        # prova a estrarre il titolo (metodo semplice)
+        titolo=$(grep -oP '(?<=<title>).*?(?=</title>)' pagina.html | sed 's/ - Cathopedia.*//')
+        echo "ESTRATTO (titolo): [$titolo]"
+        # fallback: cerca prima occorrenza di <h1> o altro
+        if [ -z "$titolo" ]; then
+          titolo=$(grep -oP '(?<=<h1[^>]*>).*?(?=</h1>)' pagina.html | sed 's/<[^>]*>//g' | head -n1)
+          echo "FALLBACK (h1): [$titolo]"
+        fi
+        # se ancora vuoto, scriviamo un segnale
+        if [ -z "$titolo" ]; then
+          titolo="ERRORE_ESTRAZIONE"
+        fi
+        echo "{ \"santo\": \"$titolo\" }" > santo-oggi.json
+
+    - name: Mostra santo-oggi.json (debug)
+      run: |
+        echo "Contenuto santo-oggi.json:"
+        cat santo-oggi.json
 
     - name: Commit e push
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git config --global user.name "github-actions"
         git config --global user.email "github-actions@github.com"
         git add santo-oggi.json
         git commit -m "Aggiornamento automatico Santo del Giorno" || echo "Nessuna modifica"
         git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
