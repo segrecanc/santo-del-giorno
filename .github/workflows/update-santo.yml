@@ -18,37 +18,66 @@ jobs:
       with:
         persist-credentials: true
 
-    - name: Mostra ambiente (debug)
-      run: |
-        echo "USER: $GITHUB_ACTOR"
-        echo "REPO: $GITHUB_REPOSITORY"
-        echo "BRANCH: $GITHUB_REF"
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
 
-    - name: Recupera pagina Santo del Giorno (debug)
+    - name: Recupera e parse Santo del Giorno con Python (debug)
+      env:
+        URL: "https://it.cathopedia.org/wiki/Santo_del_giorno"
       run: |
-        # Scarica la pagina e salva per ispezione
-        curl -s -L "https://it.cathopedia.org/wiki/Santo_del_giorno" -o pagina.html
-        echo "=== prime 200 caratteri della pagina ==="
-        head -c 200 pagina.html | sed -n '1,200p'
-        echo "=== fine anteprima ==="
-        # prova a estrarre il titolo (metodo semplice)
-        titolo=$(grep -oP '(?<=<title>).*?(?=</title>)' pagina.html | sed 's/ - Cathopedia.*//')
-        echo "ESTRATTO (titolo): [$titolo]"
-        # fallback: cerca prima occorrenza di <h1> o altro
-        if [ -z "$titolo" ]; then
-          titolo=$(grep -oP '(?<=<h1[^>]*>).*?(?=</h1>)' pagina.html | sed 's/<[^>]*>//g' | head -n1)
-          echo "FALLBACK (h1): [$titolo]"
-        fi
-        # se ancora vuoto, scriviamo un segnale
-        if [ -z "$titolo" ]; then
-          titolo="ERRORE_ESTRAZIONE"
-        fi
-        echo "{ \"santo\": \"$titolo\" }" > santo-oggi.json
+        python - <<'PY'
+        import requests
+        from bs4 import BeautifulSoup
+        import sys, json
+
+        url = "${URL}"
+        headers = {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        }
+        try:
+          r = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+          r.raise_for_status()
+        except Exception as e:
+          print("ERRORE FETCH:", e)
+          print(json.dumps({"santo":"ERRORE_FETCH"}))
+          sys.exit(0)
+
+        html = r.text
+        print("=== anteprima pagina (prime 400 caratteri) ===")
+        print(html[:400])
+        print("=== fine anteprima ===")
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        # 1) prova titolo <title>
+        title = soup.title.string.strip() if soup.title and soup.title.string else ""
+
+        # 2) fallback: primo h1 visibile
+        if not title:
+          h1 = soup.find("h1")
+          if h1:
+            title = h1.get_text(strip=True)
+
+        # 3) pulizia del titolo (rimuovi suffissi tipo " - Cathopedia")
+        if title:
+          title = title.split(" - ")[0].strip()
+
+        if not title:
+          title = "ERRORE_ESTRAZIONE"
+
+        out = {"santo": title}
+        with open("santo-oggi.json", "w", encoding="utf-8") as f:
+          json.dump(out, f, ensure_ascii=False)
+        print("ESTRATTO (titolo):", title)
+        PY
 
     - name: Mostra santo-oggi.json (debug)
       run: |
         echo "Contenuto santo-oggi.json:"
-        cat santo-oggi.json
+        cat santo-oggi.json || true
 
     - name: Commit e push
       env:
