@@ -25,3 +25,5 @@ jobs:
         git add santo-oggi.json
         git commit -m "Aggiornamento automatico Santo del Giorno" || echo "Nessuna modifica"
         git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
