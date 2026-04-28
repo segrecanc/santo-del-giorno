@@ -32,16 +32,23 @@ jobs:
       env:
         URL: "https://it.cathopedia.org/wiki/Santo_del_giorno"
       run: |
-        python - <<'PY'
-        import requests
+        python - <<PY
+        import os, requests
         from bs4 import BeautifulSoup
         import sys, json
 
-        url = "${URL}"
+        url = os.environ.get("URL", "")
         headers = {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         }
+
+        if not url:
+          print("ERRORE: variabile URL vuota")
+          with open("santo-oggi.json", "w", encoding="utf-8") as f:
+            json.dump({"santo":"ERRORE_FETCH"}, f, ensure_ascii=False)
+          sys.exit(0)
+
         try:
           r = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
           r.raise_for_status()
@@ -58,16 +65,12 @@ jobs:
 
         soup = BeautifulSoup(html, "html.parser")
 
-        # 1) prova titolo <title>
         title = soup.title.string.strip() if soup.title and soup.title.string else ""
-
-        # 2) fallback: primo h1 visibile
         if not title:
           h1 = soup.find("h1")
           if h1:
             title = h1.get_text(strip=True)
 
-        # 3) pulizia del titolo (rimuovi suffissi tipo " - Cathopedia")
         if title:
           title = title.split(" - ")[0].strip()
 
