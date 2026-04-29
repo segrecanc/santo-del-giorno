@@ -28,52 +28,50 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install requests beautifulsoup4
 
-    - name: Recupera e parse Santo del Giorno con Python (debug)
+    - name: Recupera e parse Santo del Giorno da Wikipedia
       env:
         URL: "https://it.wikipedia.org/wiki/Santo_del_giorno"
       run: |
         python - <<PY
-        import os, requests
+        import os, requests, json
         from bs4 import BeautifulSoup
-        import sys, json
 
-        url = os.environ.get("URL", "")
+        url = os.environ["URL"]
         headers = {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "text/html"
         }
 
-        try:
-          r = requests.get(url, headers=headers, timeout=20)
-          r.raise_for_status()
-        except Exception as e:
-          print("ERRORE FETCH:", e)
-          with open("santo-oggi.json", "w", encoding="utf-8") as f:
-            json.dump({"santo":"ERRORE_FETCH"}, f, ensure_ascii=False)
-          sys.exit(0)
+        r = requests.get(url, headers=headers, timeout=20)
+        r.raise_for_status()
 
         soup = BeautifulSoup(r.text, "html.parser")
 
         # Wikipedia: il santo del giorno è nel primo <h1>
         h1 = soup.find("h1")
-        if h1:
-          santo = h1.get_text(strip=True)
-        else:
-          santo = "ERRORE_ESTRAZIONE"
+        santo = h1.get_text(strip=True) if h1 else "ERRORE_ESTRAZIONE"
 
+        # Scrivi il JSON
         with open("santo-oggi.json", "w", encoding="utf-8") as f:
-          json.dump({"santo": santo}, f, ensure_ascii=False)
+            json.dump({"santo": santo}, f, ensure_ascii=False)
 
-        print("ESTRATTO (titolo):", santo)
+        print("ESTRATTO:", santo)
         PY
 
-    - name: Mostra santo-oggi.json (debug)
+    - name: Mostra santo-oggi.json
       run: |
         echo "Contenuto santo-oggi.json:"
-        cat santo-oggi.json || true
+        cat santo-oggi.json
 
     - name: Commit e push
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git add santo-oggi.json
+        git commit -m "Aggiornamento automatico Santo del Giorno" || echo "Nessuna modifica"
+        git push
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git config --global user.name "github-actions"
