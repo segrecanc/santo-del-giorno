@@ -26,32 +26,20 @@ jobs:
     - name: Installa dipendenze Python
       run: |
         python -m pip install --upgrade pip
-        python -m pip install requests beautifulsoup4
+        python -m pip install requests
 
-    - name: Recupera e parse Santo del Giorno da Wikipedia
-      env:
-        URL: "https://it.wikipedia.org/wiki/Santo_del_giorno"
+    - name: Recupera Santo del Giorno da API
       run: |
         python - <<PY
-        import os, requests, json
-        from bs4 import BeautifulSoup
+        import requests, json
 
-        url = os.environ["URL"]
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "text/html"
-        }
-
-        r = requests.get(url, headers=headers, timeout=20)
+        url = "https://www.santodelgiorno.it/api/today"
+        r = requests.get(url, timeout=20)
         r.raise_for_status()
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        data = r.json()
+        santo = data.get("nome", "ERRORE_ESTRAZIONE")
 
-        # Wikipedia: il santo del giorno è nel primo <h1>
-        h1 = soup.find("h1")
-        santo = h1.get_text(strip=True) if h1 else "ERRORE_ESTRAZIONE"
-
-        # Scrivi il JSON
         with open("santo-oggi.json", "w", encoding="utf-8") as f:
             json.dump({"santo": santo}, f, ensure_ascii=False)
 
