@@ -30,7 +30,7 @@ jobs:
 
     - name: Recupera e parse Santo del Giorno con Python (debug)
       env:
-        URL: "https://it.cathopedia.org/wiki/Santo_del_giorno"
+        URL: "https://it.wikipedia.org/wiki/Santo_del_giorno"
       run: |
         python - <<PY
         import os, requests
@@ -43,14 +43,8 @@ jobs:
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         }
 
-        if not url:
-          print("ERRORE: variabile URL vuota")
-          with open("santo-oggi.json", "w", encoding="utf-8") as f:
-            json.dump({"santo":"ERRORE_FETCH"}, f, ensure_ascii=False)
-          sys.exit(0)
-
         try:
-          r = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+          r = requests.get(url, headers=headers, timeout=20)
           r.raise_for_status()
         except Exception as e:
           print("ERRORE FETCH:", e)
@@ -58,29 +52,19 @@ jobs:
             json.dump({"santo":"ERRORE_FETCH"}, f, ensure_ascii=False)
           sys.exit(0)
 
-        html = r.text
-        print("=== anteprima pagina (prime 400 caratteri) ===")
-        print(html[:400])
-        print("=== fine anteprima ===")
+        soup = BeautifulSoup(r.text, "html.parser")
 
-        soup = BeautifulSoup(html, "html.parser")
+        # Wikipedia: il santo del giorno è nel primo <h1>
+        h1 = soup.find("h1")
+        if h1:
+          santo = h1.get_text(strip=True)
+        else:
+          santo = "ERRORE_ESTRAZIONE"
 
-        title = soup.title.string.strip() if soup.title and soup.title.string else ""
-        if not title:
-          h1 = soup.find("h1")
-          if h1:
-            title = h1.get_text(strip=True)
-
-        if title:
-          title = title.split(" - ")[0].strip()
-
-        if not title:
-          title = "ERRORE_ESTRAZIONE"
-
-        out = {"santo": title}
         with open("santo-oggi.json", "w", encoding="utf-8") as f:
-          json.dump(out, f, ensure_ascii=False)
-        print("ESTRATTO (titolo):", title)
+          json.dump({"santo": santo}, f, ensure_ascii=False)
+
+        print("ESTRATTO (titolo):", santo)
         PY
 
     - name: Mostra santo-oggi.json (debug)
